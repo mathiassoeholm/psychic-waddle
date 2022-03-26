@@ -9,3 +9,14 @@ const (
 type WebsocketEvent interface {
 	Type() WebsocketEventType
 }
+
+type NewConnectionWebsocketEvent struct {
+	PlayerId string
+}
+
+// Type implements WebsocketEvent
+func (NewConnectionWebsocketEvent) Type() string {
+	return WebsocketEventNewConnectionType
+}
+
+var _ WebsocketEvent = NewConnectionWebsocketEvent{}
