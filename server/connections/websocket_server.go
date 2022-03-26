@@ -19,7 +19,7 @@ type WebsocketServer struct {
 func NewWebsocketServer(port int) *WebsocketServer {
 	return &WebsocketServer{
 		port:                 port,
-		events:               make(chan WebsocketEvent),
+		events:               make(chan WebsocketEvent, 250),
 		playerIdToConnection: make(map[string]Websocket),
 		incoming_connections: make(chan Websocket),
 	}
@@ -35,7 +35,7 @@ func (ws *WebsocketServer) Run() {
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		go serveWebsocket(ws.incoming_connections, writer, request)
+		serveWebsocket(ws.incoming_connections, writer, request)
 	})
 
 	go func() {
