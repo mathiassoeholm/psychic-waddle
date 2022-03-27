@@ -1,0 +1,8 @@
+services:
+  server:
+    image: psychic-waddle-server
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "4000:4000"

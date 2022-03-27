@@ -7,13 +7,19 @@ import (
 	"strconv"
 )
 
+type IncomingWebsocketMessage struct {
+	PlayerId string
+	Message  []byte
+}
+
 type WebsocketServer struct {
 	port                 int
 	events               chan WebsocketEvent
 	nextId               int
 	playerIdToConnection map[string]Websocket
 
-	incoming_connections chan Websocket
+	incomingConnections chan Websocket
+	incomingMessages    chan IncomingWebsocketMessage
 }
 
 func NewWebsocketServer(port int) *WebsocketServer {
@@ -21,7 +27,8 @@ func NewWebsocketServer(port int) *WebsocketServer {
 		port:                 port,
 		events:               make(chan WebsocketEvent, 250),
 		playerIdToConnection: make(map[string]Websocket),
-		incoming_connections: make(chan Websocket),
+		incomingConnections:  make(chan Websocket),
+		incomingMessages:     make(chan IncomingWebsocketMessage),
 	}
 }
 
@@ -35,7 +42,7 @@ func (ws *WebsocketServer) Run() {
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		serveWebsocket(ws.incoming_connections, writer, request)
+		serveWebsocket(ws.incomingConnections, writer, request)
 	})
 
 	go func() {
@@ -47,12 +54,26 @@ func (ws *WebsocketServer) Run() {
 
 	for {
 		select {
-		case connection := <-ws.incoming_connections:
+		case connection := <-ws.incomingConnections:
 			playerId := strconv.Itoa(ws.nextId)
+			ws.nextId++
+
+			ws.playerIdToConnection[playerId] = connection
+			connection.accept(playerId, ws.incomingMessages)
+
 			ws.events <- NewConnectionWebsocketEvent{
 				PlayerId: playerId,
 			}
-			ws.playerIdToConnection[playerId] = connection
+
+			fmt.Println("New connection:", playerId)
+
+		case message, ok := <-ws.incomingMessages:
+			if !ok {
+				panic("incoming_messages channel closed")
+			}
+
+			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
 		}
+
 	}
 }

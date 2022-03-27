@@ -4,6 +4,7 @@ type WebsocketEventType = string
 
 const (
 	WebsocketEventNewConnectionType WebsocketEventType = "new_connection"
+	WebsocketEventMessageType       WebsocketEventType = "message"
 )
 
 type WebsocketEvent interface {
@@ -14,9 +15,19 @@ type NewConnectionWebsocketEvent struct {
 	PlayerId string
 }
 
-// Type implements WebsocketEvent
-func (NewConnectionWebsocketEvent) Type() string {
+func (NewConnectionWebsocketEvent) Type() WebsocketEventType {
 	return WebsocketEventNewConnectionType
 }
 
 var _ WebsocketEvent = NewConnectionWebsocketEvent{}
+
+type MessageWebsocketEvent struct {
+	PlayerId string
+	Message  []byte
+}
+
+func (MessageWebsocketEvent) Type() WebsocketEventType {
+	return WebsocketEventMessageType
+}
+
+var _ WebsocketEvent = MessageWebsocketEvent{}

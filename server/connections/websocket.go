@@ -13,10 +13,9 @@ type WebsocketMessage = []byte
 
 type Websocket struct {
 	socket *websocket.Conn
+	id     string
 	// To the web
 	outgoing chan WebsocketMessage
-	// From the web
-	incoming chan WebsocketMessage
 }
 
 var upgrader = websocket.Upgrader{
@@ -41,26 +40,37 @@ func serveWebsocket(resultChannel chan<- Websocket, writer http.ResponseWriter, 
 	socket.SetReadDeadline(time.Now().Add(pongWait))
 	socket.SetPongHandler(func(string) error { socket.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
-	websocket := Websocket{socket: socket, incoming: make(chan WebsocketMessage), outgoing: make(chan WebsocketMessage)}
-
-	go websocket.readPump()
-	go websocket.writePump()
+	websocket := Websocket{socket: socket, outgoing: make(chan WebsocketMessage)}
 
 	resultChannel <- websocket
 	log.Println("serveSocket end")
 }
 
-func (ws *Websocket) readPump() {
+func (ws *Websocket) accept(playerId string, messageChannel chan<- IncomingWebsocketMessage) {
+	ws.id = playerId
+
+	go ws.readPump(messageChannel)
+	go ws.writePump()
+
+}
+
+func (ws *Websocket) readPump(messageChannel chan<- IncomingWebsocketMessage) {
 	defer ws.socket.Close()
 
 	for {
 		_, message, err := ws.socket.ReadMessage()
+		fmt.Println("Got message:", string(message))
 		if err != nil {
 			fmt.Println("readPump error:", err)
 			break
 		}
 
-		ws.incoming <- message
+		messageChannel <- IncomingWebsocketMessage{
+			PlayerId: ws.id,
+			Message:  message,
+		}
+
+		fmt.Println("Put message in channel")
 	}
 }
 
