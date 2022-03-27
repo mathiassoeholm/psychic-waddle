@@ -8,6 +8,7 @@ app.innerHTML = `
 `;
 
 const websocket = new WebSocket("ws://localhost:4000");
+websocket.binaryType = "arraybuffer";
 websocket.addEventListener("open", () => {
   console.log("Connected to websocket");
   websocket.send("Hello Server!");
@@ -18,5 +19,5 @@ websocket.addEventListener("error", (error) => {
 });
 
 websocket.addEventListener("message", (message) => {
-  console.log(message);
+  console.log(new TextDecoder().decode(message.data));
 });

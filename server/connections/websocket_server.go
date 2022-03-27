@@ -74,6 +74,14 @@ func (ws *WebsocketServer) Run() {
 
 			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
 		}
-
 	}
+}
+
+func (ws *WebsocketServer) Send(playerId string, message []byte) error {
+	connection, exists := ws.playerIdToConnection[playerId]
+	if !exists {
+		return fmt.Errorf("no connection with player id %q", playerId)
+	}
+	connection.outgoing <- message
+	return nil
 }
