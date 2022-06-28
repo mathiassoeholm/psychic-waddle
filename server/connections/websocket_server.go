@@ -7,32 +7,32 @@ import (
 	"strconv"
 )
 
-type IncomingWebsocketMessage struct {
+type IncomingMessage struct {
 	PlayerId string
 	Message  []byte
 }
 
 type WebsocketServer struct {
 	port                 int
-	events               chan WebsocketEvent
+	events               chan ConnectionEvent
 	nextId               int
-	playerIdToConnection map[string]Websocket
+	playerIdToConnection map[string]Connection
 
-	incomingConnections chan Websocket
-	incomingMessages    chan IncomingWebsocketMessage
+	incomingConnections chan Connection
+	incomingMessages    chan IncomingMessage
 }
 
 func NewWebsocketServer(port int) *WebsocketServer {
 	return &WebsocketServer{
 		port:                 port,
-		events:               make(chan WebsocketEvent, 250),
-		playerIdToConnection: make(map[string]Websocket),
-		incomingConnections:  make(chan Websocket),
-		incomingMessages:     make(chan IncomingWebsocketMessage),
+		events:               make(chan ConnectionEvent, 250),
+		playerIdToConnection: make(map[string]Connection),
+		incomingConnections:  make(chan Connection),
+		incomingMessages:     make(chan IncomingMessage),
 	}
 }
 
-func (ws *WebsocketServer) Events() <-chan WebsocketEvent {
+func (ws *WebsocketServer) Events() <-chan ConnectionEvent {
 	return ws.events
 }
 
@@ -42,7 +42,13 @@ func (ws *WebsocketServer) Run() {
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		serveWebsocket(ws.incomingConnections, writer, request)
+		connection, err := createConnection(writer, request)
+		if err != nil {
+			fmt.Println("Error creating connection:", err)
+			return
+		}
+
+		ws.incomingConnections <- connection
 	})
 
 	go func() {
@@ -61,7 +67,7 @@ func (ws *WebsocketServer) Run() {
 			ws.playerIdToConnection[playerId] = connection
 			connection.accept(playerId, ws.incomingMessages)
 
-			ws.events <- NewConnectionWebsocketEvent{
+			ws.events <- NewConnection{
 				PlayerId: playerId,
 			}
 

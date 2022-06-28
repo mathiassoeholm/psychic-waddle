@@ -2,20 +2,18 @@ package connections
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"time"
 
 	"github.com/gorilla/websocket"
 )
 
-type WebsocketMessage = []byte
+type OutgoingMessage = []byte
 
-type Websocket struct {
-	socket *websocket.Conn
-	id     string
-	// To the web
-	outgoing chan WebsocketMessage
+type Connection struct {
+	socket   *websocket.Conn
+	id       string
+	outgoing chan OutgoingMessage
 }
 
 var upgrader = websocket.Upgrader{
@@ -26,12 +24,10 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func serveWebsocket(resultChannel chan<- Websocket, writer http.ResponseWriter, request *http.Request) {
-	log.Println("serveSocket start")
+func createConnection(writer http.ResponseWriter, request *http.Request) (Connection, error) {
 	socket, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
-		fmt.Println(err)
-		return
+		return Connection{}, err
 	}
 
 	// We give the clients 60 seconds to read Ping frames.
@@ -40,13 +36,10 @@ func serveWebsocket(resultChannel chan<- Websocket, writer http.ResponseWriter, 
 	socket.SetReadDeadline(time.Now().Add(pongWait))
 	socket.SetPongHandler(func(string) error { socket.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
-	websocket := Websocket{socket: socket, outgoing: make(chan WebsocketMessage)}
-
-	resultChannel <- websocket
-	log.Println("serveSocket end")
+	return Connection{socket: socket, outgoing: make(chan OutgoingMessage)}, nil
 }
 
-func (ws *Websocket) accept(playerId string, messageChannel chan<- IncomingWebsocketMessage) {
+func (ws *Connection) accept(playerId string, messageChannel chan<- IncomingMessage) {
 	ws.id = playerId
 
 	go ws.readPump(messageChannel)
@@ -54,7 +47,7 @@ func (ws *Websocket) accept(playerId string, messageChannel chan<- IncomingWebso
 
 }
 
-func (ws *Websocket) readPump(messageChannel chan<- IncomingWebsocketMessage) {
+func (ws *Connection) readPump(messageChannel chan<- IncomingMessage) {
 	defer ws.socket.Close()
 
 	for {
@@ -65,7 +58,7 @@ func (ws *Websocket) readPump(messageChannel chan<- IncomingWebsocketMessage) {
 			break
 		}
 
-		messageChannel <- IncomingWebsocketMessage{
+		messageChannel <- IncomingMessage{
 			PlayerId: ws.id,
 			Message:  message,
 		}
@@ -74,7 +67,7 @@ func (ws *Websocket) readPump(messageChannel chan<- IncomingWebsocketMessage) {
 	}
 }
 
-func (ws *Websocket) writePump() {
+func (ws *Connection) writePump() {
 	defer ws.socket.Close()
 
 	for {
