@@ -1,4 +1,4 @@
-package connections
+package server
 
 import (
 	"fmt"
@@ -12,7 +12,7 @@ type IncomingMessage struct {
 	Message  []byte
 }
 
-type WebsocketServer struct {
+type Server struct {
 	port                 int
 	events               chan ConnectionEvent
 	nextId               int
@@ -22,8 +22,8 @@ type WebsocketServer struct {
 	incomingMessages    chan IncomingMessage
 }
 
-func NewWebsocketServer(port int) *WebsocketServer {
-	return &WebsocketServer{
+func New(port int) *Server {
+	return &Server{
 		port:                 port,
 		events:               make(chan ConnectionEvent, 250),
 		playerIdToConnection: make(map[string]Connection),
@@ -32,12 +32,12 @@ func NewWebsocketServer(port int) *WebsocketServer {
 	}
 }
 
-func (ws *WebsocketServer) Events() <-chan ConnectionEvent {
-	return ws.events
+func (server *Server) Events() <-chan ConnectionEvent {
+	return server.events
 }
 
-func (ws *WebsocketServer) Run() {
-	fmt.Println("Websocket server running on port", ws.port)
+func (server *Server) Run() {
+	fmt.Println("Server running on port", server.port)
 
 	serveMux := http.NewServeMux()
 
@@ -48,11 +48,11 @@ func (ws *WebsocketServer) Run() {
 			return
 		}
 
-		ws.incomingConnections <- connection
+		server.incomingConnections <- connection
 	})
 
 	go func() {
-		err := http.ListenAndServe(":"+strconv.Itoa(ws.port), serveMux)
+		err := http.ListenAndServe(":"+strconv.Itoa(server.port), serveMux)
 		if err != nil {
 			log.Fatal("Websocket server error:", err)
 		}
@@ -60,22 +60,22 @@ func (ws *WebsocketServer) Run() {
 
 	for {
 		select {
-		case connection := <-ws.incomingConnections:
-			playerId := strconv.Itoa(ws.nextId)
-			ws.nextId++
+		case connection := <-server.incomingConnections:
+			playerId := strconv.Itoa(server.nextId)
+			server.nextId++
 
-			ws.playerIdToConnection[playerId] = connection
-			connection.accept(playerId, ws.incomingMessages)
+			server.playerIdToConnection[playerId] = connection
+			connection.accept(playerId, server.incomingMessages)
 
-			ws.events <- NewConnection{
+			server.events <- NewConnection{
 				PlayerId: playerId,
 			}
 
 			fmt.Println("New connection:", playerId)
 
-		case message, ok := <-ws.incomingMessages:
+		case message, ok := <-server.incomingMessages:
 			if !ok {
-				panic("incoming_messages channel closed")
+				panic("incoming messages channel closed")
 			}
 
 			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
@@ -83,8 +83,8 @@ func (ws *WebsocketServer) Run() {
 	}
 }
 
-func (ws *WebsocketServer) Send(playerId string, message []byte) error {
-	connection, exists := ws.playerIdToConnection[playerId]
+func (server *Server) Send(playerId string, message []byte) error {
+	connection, exists := server.playerIdToConnection[playerId]
 	if !exists {
 		return fmt.Errorf("no connection with player id %q", playerId)
 	}

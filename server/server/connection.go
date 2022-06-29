@@ -1,4 +1,4 @@
-package connections
+package server
 
 import (
 	"fmt"
@@ -39,19 +39,18 @@ func createConnection(writer http.ResponseWriter, request *http.Request) (Connec
 	return Connection{socket: socket, outgoing: make(chan OutgoingMessage)}, nil
 }
 
-func (ws *Connection) accept(playerId string, messageChannel chan<- IncomingMessage) {
-	ws.id = playerId
+func (connection *Connection) accept(playerId string, messageChannel chan<- IncomingMessage) {
+	connection.id = playerId
 
-	go ws.readPump(messageChannel)
-	go ws.writePump()
-
+	go connection.readPump(messageChannel)
+	go connection.writePump()
 }
 
-func (ws *Connection) readPump(messageChannel chan<- IncomingMessage) {
-	defer ws.socket.Close()
+func (connection *Connection) readPump(messageChannel chan<- IncomingMessage) {
+	defer connection.socket.Close()
 
 	for {
-		_, message, err := ws.socket.ReadMessage()
+		_, message, err := connection.socket.ReadMessage()
 		fmt.Println("Got message:", string(message))
 		if err != nil {
 			fmt.Println("readPump error:", err)
@@ -59,7 +58,7 @@ func (ws *Connection) readPump(messageChannel chan<- IncomingMessage) {
 		}
 
 		messageChannel <- IncomingMessage{
-			PlayerId: ws.id,
+			PlayerId: connection.id,
 			Message:  message,
 		}
 
@@ -67,13 +66,13 @@ func (ws *Connection) readPump(messageChannel chan<- IncomingMessage) {
 	}
 }
 
-func (ws *Connection) writePump() {
-	defer ws.socket.Close()
+func (connection *Connection) writePump() {
+	defer connection.socket.Close()
 
 	for {
 		select {
-		case message := <-ws.outgoing:
-			err := ws.socket.WriteMessage(websocket.BinaryMessage, message)
+		case message := <-connection.outgoing:
+			err := connection.socket.WriteMessage(websocket.BinaryMessage, message)
 			if err != nil {
 				fmt.Println("writePump error:", err)
 				break

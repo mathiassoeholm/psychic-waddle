@@ -1,14 +1,14 @@
 package main
 
-import "github.com/mathiassoeholm/psychic-waddle/server/connections"
+import server "github.com/mathiassoeholm/psychic-waddle/server/server"
 
 func main() {
-	server := connections.NewWebsocketServer(4000)
-	go server.Run()
-	for event := range server.Events() {
+	s := server.New(4000)
+	go s.Run()
+	for event := range s.Events() {
 		switch casted := event.(type) {
-		case connections.NewConnection:
-			server.Send(casted.PlayerId, []byte("Welcome to the game! :-)"))
+		case server.NewConnection:
+			s.Send(casted.PlayerId, []byte("Welcome to the game! :-)"))
 		}
 	}
 }
