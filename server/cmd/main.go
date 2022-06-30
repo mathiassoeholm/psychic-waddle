@@ -1,6 +1,10 @@
 package main
 
-import server "github.com/mathiassoeholm/psychic-waddle/server/server"
+import (
+	"fmt"
+
+	server "github.com/mathiassoeholm/psychic-waddle/server/server"
+)
 
 func main() {
 	s := server.New(4000)
@@ -9,6 +13,9 @@ func main() {
 		switch casted := event.(type) {
 		case server.NewConnection:
 			s.Send(casted.PlayerId, []byte("Welcome to the game! :-)"))
+		case server.ReceivedMessage:
+			fmt.Println("Got message:", string(casted.Message))
+			s.SendToAllExcept(casted.PlayerId, casted.Message)
 		}
 	}
 }

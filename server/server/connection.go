@@ -12,7 +12,7 @@ type OutgoingMessage = []byte
 
 type Connection struct {
 	socket   *websocket.Conn
-	id       string
+	playerId string
 	outgoing chan OutgoingMessage
 }
 
@@ -24,7 +24,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func createConnection(writer http.ResponseWriter, request *http.Request) (Connection, error) {
+func createConnection(writer http.ResponseWriter, request *http.Request, playerId string) (Connection, error) {
 	socket, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		return Connection{}, err
@@ -36,14 +36,13 @@ func createConnection(writer http.ResponseWriter, request *http.Request) (Connec
 	socket.SetReadDeadline(time.Now().Add(pongWait))
 	socket.SetPongHandler(func(string) error { socket.SetReadDeadline(time.Now().Add(pongWait)); return nil })
 
-	return Connection{socket: socket, outgoing: make(chan OutgoingMessage)}, nil
+	return Connection{socket: socket, outgoing: make(chan OutgoingMessage), playerId: playerId}, nil
 }
 
-func (connection *Connection) accept(playerId string, messageChannel chan<- IncomingMessage) {
-	connection.id = playerId
-
+func (connection *Connection) accept(messageChannel chan<- IncomingMessage, disconnect chan<- bool) {
+	// TODO: how does an error in write pump stop the read pump?
 	go connection.readPump(messageChannel)
-	go connection.writePump()
+	go connection.writePump(disconnect)
 }
 
 func (connection *Connection) readPump(messageChannel chan<- IncomingMessage) {
@@ -58,7 +57,7 @@ func (connection *Connection) readPump(messageChannel chan<- IncomingMessage) {
 		}
 
 		messageChannel <- IncomingMessage{
-			PlayerId: connection.id,
+			PlayerId: connection.playerId,
 			Message:  message,
 		}
 
@@ -66,7 +65,7 @@ func (connection *Connection) readPump(messageChannel chan<- IncomingMessage) {
 	}
 }
 
-func (connection *Connection) writePump() {
+func (connection *Connection) writePump(disconnect chan<- bool) {
 	defer connection.socket.Close()
 
 	for {
@@ -75,6 +74,7 @@ func (connection *Connection) writePump() {
 			err := connection.socket.WriteMessage(websocket.BinaryMessage, message)
 			if err != nil {
 				fmt.Println("writePump error:", err)
+				disconnect <- true
 				break
 			}
 		}

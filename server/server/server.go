@@ -18,8 +18,7 @@ type Server struct {
 	nextId               int
 	playerIdToConnection map[string]Connection
 
-	incomingConnections chan Connection
-	incomingMessages    chan IncomingMessage
+	incomingMessages chan IncomingMessage
 }
 
 func New(port int) *Server {
@@ -27,7 +26,6 @@ func New(port int) *Server {
 		port:                 port,
 		events:               make(chan ConnectionEvent, 250),
 		playerIdToConnection: make(map[string]Connection),
-		incomingConnections:  make(chan Connection),
 		incomingMessages:     make(chan IncomingMessage),
 	}
 }
@@ -42,13 +40,31 @@ func (server *Server) Run() {
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		connection, err := createConnection(writer, request)
+		playerId := strconv.Itoa(server.nextId)
+		server.nextId++
+
+		connection, err := createConnection(writer, request, playerId)
+
 		if err != nil {
 			fmt.Println("Error creating connection:", err)
 			return
 		}
 
-		server.incomingConnections <- connection
+		server.playerIdToConnection[playerId] = connection
+
+		disconnect := make(chan bool)
+		connection.accept(server.incomingMessages, disconnect)
+
+		go func() {
+			<-disconnect
+			delete(server.playerIdToConnection, playerId)
+		}()
+
+		server.events <- NewConnection{
+			PlayerId: playerId,
+		}
+
+		fmt.Println("New connection:", playerId)
 	})
 
 	go func() {
@@ -60,25 +76,26 @@ func (server *Server) Run() {
 
 	for {
 		select {
-		case connection := <-server.incomingConnections:
-			playerId := strconv.Itoa(server.nextId)
-			server.nextId++
-
-			server.playerIdToConnection[playerId] = connection
-			connection.accept(playerId, server.incomingMessages)
-
-			server.events <- NewConnection{
-				PlayerId: playerId,
-			}
-
-			fmt.Println("New connection:", playerId)
-
 		case message, ok := <-server.incomingMessages:
 			if !ok {
 				panic("incoming messages channel closed")
 			}
 
 			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
+
+			server.events <- ReceivedMessage{
+				PlayerId: message.PlayerId,
+				Message:  message.Message,
+			}
+		}
+	}
+}
+
+func (server *Server) SendToAllExcept(playerId string, message []byte) {
+	for _, connection := range server.playerIdToConnection {
+		if connection.playerId != playerId {
+			fmt.Printf("Sending message to %q", connection.playerId)
+			connection.outgoing <- message
 		}
 	}
 }
