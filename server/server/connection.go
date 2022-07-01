@@ -39,42 +39,48 @@ func createConnection(writer http.ResponseWriter, request *http.Request, playerI
 	return Connection{socket: socket, outgoing: make(chan OutgoingMessage), playerId: playerId}, nil
 }
 
-func (connection *Connection) accept(messageChannel chan<- IncomingMessage, disconnect chan<- bool) {
-	// TODO: how does an error in write pump stop the read pump?
-	go connection.readPump(messageChannel)
+func (connection *Connection) accept(messageChannel chan<- IncomingMessage, disconnect chan bool) {
+	go connection.readPump(messageChannel, disconnect)
 	go connection.writePump(disconnect)
+
+	go func() {
+		<-disconnect
+		connection.socket.Close()
+	}()
 }
 
-func (connection *Connection) readPump(messageChannel chan<- IncomingMessage) {
-	defer connection.socket.Close()
-
+func (connection *Connection) readPump(messageChannel chan<- IncomingMessage, disconnect chan bool) {
 	for {
-		_, message, err := connection.socket.ReadMessage()
-		fmt.Println("Got message:", string(message))
-		if err != nil {
-			fmt.Println("readPump error:", err)
-			break
-		}
+		select {
+		case <-disconnect:
+			return
+		default:
+			_, message, err := connection.socket.ReadMessage()
+			fmt.Println("Got message:", string(message))
+			if err != nil {
+				fmt.Println("readPump error:", err)
+				close(disconnect)
+				break
+			}
 
-		messageChannel <- IncomingMessage{
-			PlayerId: connection.playerId,
-			Message:  message,
+			messageChannel <- IncomingMessage{
+				PlayerId: connection.playerId,
+				Message:  message,
+			}
 		}
-
-		fmt.Println("Put message in channel")
 	}
 }
 
-func (connection *Connection) writePump(disconnect chan<- bool) {
-	defer connection.socket.Close()
-
+func (connection *Connection) writePump(disconnect chan bool) {
 	for {
 		select {
+		case <-disconnect:
+			return
 		case message := <-connection.outgoing:
 			err := connection.socket.WriteMessage(websocket.BinaryMessage, message)
 			if err != nil {
 				fmt.Println("writePump error:", err)
-				disconnect <- true
+				close(disconnect)
 				break
 			}
 		}
