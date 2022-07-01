@@ -12,7 +12,7 @@ type OutgoingMessage = []byte
 
 type Connection struct {
 	socket   *websocket.Conn
-	playerId string
+	playerId uint32
 	outgoing chan OutgoingMessage
 }
 
@@ -24,7 +24,7 @@ var upgrader = websocket.Upgrader{
 	},
 }
 
-func createConnection(writer http.ResponseWriter, request *http.Request, playerId string) (Connection, error) {
+func createConnection(writer http.ResponseWriter, request *http.Request, playerId uint32) (Connection, error) {
 	socket, err := upgrader.Upgrade(writer, request, nil)
 	if err != nil {
 		return Connection{}, err

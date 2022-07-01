@@ -10,7 +10,7 @@ type ConnectionEvent interface {
 }
 
 type NewConnection struct {
-	PlayerId string
+	PlayerId uint32
 }
 
 func (NewConnection) Type() string {
@@ -18,7 +18,7 @@ func (NewConnection) Type() string {
 }
 
 type ReceivedMessage struct {
-	PlayerId string
+	PlayerId uint32
 	Message  []byte
 }
 

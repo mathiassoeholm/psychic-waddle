@@ -8,15 +8,15 @@ import (
 )
 
 type IncomingMessage struct {
-	PlayerId string
+	PlayerId uint32
 	Message  []byte
 }
 
 type Server struct {
 	port                 int
 	events               chan ConnectionEvent
-	nextId               int
-	playerIdToConnection map[string]Connection
+	nextId               uint32
+	playerIdToConnection map[uint32]Connection
 
 	incomingMessages chan IncomingMessage
 }
@@ -25,7 +25,7 @@ func New(port int) *Server {
 	return &Server{
 		port:                 port,
 		events:               make(chan ConnectionEvent, 250),
-		playerIdToConnection: make(map[string]Connection),
+		playerIdToConnection: make(map[uint32]Connection),
 		incomingMessages:     make(chan IncomingMessage),
 	}
 }
@@ -40,7 +40,7 @@ func (server *Server) Run() {
 	serveMux := http.NewServeMux()
 
 	serveMux.HandleFunc("/", func(writer http.ResponseWriter, request *http.Request) {
-		playerId := strconv.Itoa(server.nextId)
+		playerId := server.nextId
 		server.nextId++
 
 		connection, err := createConnection(writer, request, playerId)
@@ -84,7 +84,7 @@ func (server *Server) Run() {
 			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
 
 			if len(message.Message) > 0 {
-				handleMessage(message.PlayerId, message.Message[0], message.Message[1:])
+				server.handleMessage(message.PlayerId, message.Message[0], message.Message[1:])
 			}
 
 			server.events <- ReceivedMessage{
@@ -95,7 +95,7 @@ func (server *Server) Run() {
 	}
 }
 
-func (server *Server) SendToAllExcept(playerId string, message []byte) {
+func (server *Server) SendToAllExcept(playerId uint32, message []byte) {
 	for _, connection := range server.playerIdToConnection {
 		if connection.playerId != playerId {
 			fmt.Printf("Sending message to %q", connection.playerId)
@@ -104,7 +104,7 @@ func (server *Server) SendToAllExcept(playerId string, message []byte) {
 	}
 }
 
-func (server *Server) Send(playerId string, message []byte) error {
+func (server *Server) Send(playerId uint32, message []byte) error {
 	connection, exists := server.playerIdToConnection[playerId]
 	if !exists {
 		return fmt.Errorf("no connection with player id %q", playerId)
