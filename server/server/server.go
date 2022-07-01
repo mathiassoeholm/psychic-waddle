@@ -83,6 +83,10 @@ func (server *Server) Run() {
 
 			fmt.Printf("Incoming message from %q: %v\n", message.PlayerId, string(message.Message))
 
+			if len(message.Message) > 0 {
+				handleMessage(message.PlayerId, message.Message[0], message.Message[1:])
+			}
+
 			server.events <- ReceivedMessage{
 				PlayerId: message.PlayerId,
 				Message:  message.Message,
