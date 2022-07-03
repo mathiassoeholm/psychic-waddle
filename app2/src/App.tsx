@@ -1,45 +1,75 @@
-import { useState } from 'react'
-import logo from './logo.svg'
-import './App.css'
+import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useWindowSize,
+  useKeyPress,
+  useKeyPressEvent,
+  useRafLoop,
+} from "react-use";
+import "./App.css";
 
 function App() {
-  const [count, setCount] = useState(0)
+  const { width, height } = useWindowSize();
+  const position = useRef({ x: width / 2, y: height / 2 });
+  const keys = useRef({
+    ArrowLeft: false,
+    ArrowRight: false,
+    ArrowUp: false,
+    ArrowDown: false,
+  });
 
-  return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>Hello Vite + React!</p>
-        <p>
-          <button type="button" onClick={() => setCount((count) => count + 1)}>
-            count is: {count}
-          </button>
-        </p>
-        <p>
-          Edit <code>App.tsx</code> and save to test HMR updates.
-        </p>
-        <p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-          {' | '}
-          <a
-            className="App-link"
-            href="https://vitejs.dev/guide/features.html"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Vite Docs
-          </a>
-        </p>
-      </header>
-    </div>
-  )
+  const setKeyDown = (key: keyof typeof keys["current"]) => () => {
+    keys.current[key] = true;
+  };
+
+  const setKeyUp = (key: keyof typeof keys["current"]) => () => {
+    keys.current[key] = false;
+  };
+
+  for (const key in keys.current) {
+    const k = key as keyof typeof keys["current"];
+    useKeyPressEvent(k, setKeyDown(k), setKeyUp(k));
+  }
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const context = useRef<CanvasRenderingContext2D | null>(null);
+
+  const gameLoop = (time: number) => {
+    const moveSpeed = 5;
+    if (keys.current.ArrowLeft) {
+      position.current.x -= 5;
+    }
+    if (keys.current.ArrowRight) {
+      position.current.x += 5;
+    }
+    if (keys.current.ArrowUp) {
+      position.current.y -= 5;
+    }
+    if (keys.current.ArrowDown) {
+      position.current.y += 5;
+    }
+  };
+
+  useRafLoop(gameLoop);
+
+  const draw = (ctx: CanvasRenderingContext2D) => {
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.arc(position.current.x, position.current.y, 20, 0, 2 * Math.PI);
+    ctx.fill();
+  };
+
+  useRafLoop((time) => {
+    if (!context.current && canvasRef.current) {
+      context.current = canvasRef.current.getContext("2d");
+    }
+
+    if (context.current) {
+      draw(context.current);
+    }
+  });
+
+  return <canvas ref={canvasRef} width={width} height={height}></canvas>;
 }
 
-export default App
+export default App;
